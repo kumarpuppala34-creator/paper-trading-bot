@@ -134,7 +134,12 @@ def main():
     db.init_db()
     print("Running the backtest to decide which strategies are allowed to trade live...")
     import backtester
-    backtester.run_all()
+    try:
+        backtester.run_all()
+    except Exception as e:
+        # a bad backtest run must not kill the whole bot before it even starts
+        # trading - log it honestly and carry on with whatever did get scored.
+        db.log_event("error", f"Initial backtest run failed: {e}")
 
     approved = approved_strategies()
     if not approved:
@@ -161,8 +166,11 @@ def main():
 
         # re-run the backtest periodically so "approved" stays current with real data
         if int(time.time()) % 3600 < config.POLL_INTERVAL_SECONDS:
-            backtester.run_all()
-            approved = approved_strategies()
+            try:
+                backtester.run_all()
+                approved = approved_strategies()
+            except Exception as e:
+                db.log_event("error", f"Periodic backtest run failed: {e}")
 
         time.sleep(config.POLL_INTERVAL_SECONDS)
 
