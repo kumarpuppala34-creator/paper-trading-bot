@@ -127,7 +127,14 @@ def run_backtest(symbol: str, strategy_name: str, df: pd.DataFrame | None = None
 def run_all() -> list[BacktestResult]:
     results = []
     for symbol in config.CRYPTO_SYMBOLS + config.STOCK_SYMBOLS:
-        history = data_feed.get_historical(symbol, config.BACKTEST_LOOKBACK_DAYS)
+        try:
+            history = data_feed.get_historical(symbol, config.BACKTEST_LOOKBACK_DAYS)
+        except Exception as e:
+            # one symbol's data source hiccup (rate limit, timeout, etc.) should
+            # not take down the backtest for every other symbol - skip it honestly
+            # and say why, rather than silently pretending it passed.
+            db.log_event("warn", f"Skipping backtest for {symbol}: real data fetch failed - {e}")
+            continue
         for strategy_name in strategies.STRATEGIES:
             result = run_backtest(symbol, strategy_name, df=history)
             results.append(result)
